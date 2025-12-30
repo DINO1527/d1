@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'; // <--- ADD THIS LINE
+export const runtime = 'edge';
 import { getDb } from "@/db/client";
 import { todos } from "@/db/schema";
 import { TodoInput } from "@/features/todo/components/TodoInput";
