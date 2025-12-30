@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'; // <--- ADD THIS LINE
 import { getDb } from "@/db/client";
 import { todos } from "@/db/schema";
 import { TodoInput } from "@/features/todo/components/TodoInput";
