@@ -9,13 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
     "axios": "^1.13.2",
+    "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.1",
+    "firebase": "^12.7.0",
     "framer-motion": "^12.23.26",
+    "lucide-react": "^0.562.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "supabase": "^2.70.5"
+    "supabase": "^2.70.5",
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.16",
