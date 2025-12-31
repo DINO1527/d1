@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { auth } from '@/lib/firebase';
-
+export const runtime = 'edge';
 export default function BlogReadPage({ params }) {
   const { id } = use(params);
   const [data, setData] = useState(null);
