@@ -5,6 +5,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  serverExternalPackages: ["async_hooks", "node:async_hooks"],
 };
 
 if (process.env.NODE_ENV === 'development') {

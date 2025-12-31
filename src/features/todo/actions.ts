@@ -18,5 +18,6 @@ export async function addTodo(formData: FormData) {
   });
 
   // Refresh the UI
-  revalidatePath("/");
+   revalidatePath("/");
+ 
 }
