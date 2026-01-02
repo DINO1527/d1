@@ -10,3 +10,6 @@ binding = "DB" # This is the name we use in code
 database_name = "example"
 database_id = "eb2dbfd1-c591-49b2-94e1-71277a8c790b"
 migrations_dir = "drizzle"
+
+[browser]
+binding = "MYBROWSER"

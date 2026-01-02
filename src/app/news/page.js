@@ -230,7 +230,7 @@ export default function MainNews() {
   const handleDownloadPdf = async () => {
     setIsGeneratingPdf(true);
     try {
-       // const response = await fetch(`/api/public/generate-pdf?requester=${userUid}`);
+        const response = await fetch(`/api/public/generate-pdf?requester=${userUid}`);
         if (!response.ok) throw new Error("PDF generation failed");
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
