@@ -4,6 +4,7 @@ import puppeteer from '@cloudflare/puppeteer';
 // 2. Change: Use your new D1 helper
 import { getDB } from '@/lib/db';
 import { getRequestContext } from '@cloudflare/next-on-pages';
+export const runtime = 'edge';
 
 // Note: 'fs' and 'path' are removed because they don't work in Cloudflare Edge.
 
