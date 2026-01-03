@@ -1,31 +1,26 @@
 import { NextResponse } from 'next/server';
-// 1. Change: Use Cloudflare Puppeteer
-import puppeteer from '@cloudflare/puppeteer';
-// 2. Change: Use your new D1 helper
+import puppeteer from '@cloudflare/puppeteer'; // Must use this package
 import { getDB } from '@/lib/db';
 import { getRequestContext } from '@cloudflare/next-on-pages';
 
-
-// Note: 'fs' and 'path' are removed because they don't work in Cloudflare Edge.
+export const runtime = 'edge';
 
 // ==================================================================
-// 1. DATA FETCHING LOGIC (Updated for D1 / SQLite)
+// 1. DATA FETCHING (Same as before)
 // ==================================================================
 async function fetchPdfData(requesterUid) {
-    const db = getDB(); // Get D1 instance
-
+    const db = getDB();
     let userLang = 'English';
+
+    // 1. Get User Language
     if (requesterUid && requesterUid !== 'undefined') {
-        // SQLite: bind uses variable arguments, .all() returns { results: [] }
         const { results } = await db.prepare('SELECT language FROM user WHERE firebaseUid = ?')
             .bind(requesterUid)
             .all();
-        
         if (results.length > 0) userLang = results[0].language || 'English';
     }
 
-    console.log(`[PDF Gen] Generating for user: ${requesterUid}, Language: ${userLang}`);
-
+    // 2. Calculate Dates
     const today = new Date();
     const dayOfWeek = today.getDay(); 
     const targetSunday = new Date(today);
@@ -39,18 +34,17 @@ async function fetchPdfData(requesterUid) {
     const nextSaturday = new Date(targetSunday);
     nextSaturday.setDate(targetSunday.getDate() + 6);
 
+    // 3. Fetch News
     let newsQuery = `SELECT title, description, news_date, language FROM news WHERE news_date BETWEEN ? AND ?`;
     let newsParams = [prevFriday.toISOString().split('T')[0], nextFriday.toISOString().split('T')[0]];
 
-    if (userLang === 'Sinhala') {
-        newsQuery += ` AND language = 'Sinhala'`;
-    } else {
-        newsQuery += ` AND language IN ('English', 'Tamil')`;
-    }
+    if (userLang === 'Sinhala') newsQuery += ` AND language = 'Sinhala'`;
+    else newsQuery += ` AND language IN ('English', 'Tamil')`;
     newsQuery += ` ORDER BY news_date ASC, title ASC`;
 
     const { results: newsRows } = await db.prepare(newsQuery).bind(...newsParams).all();
 
+    // 4. Fetch Roster
     let rosterRows = [];
     if (userLang !== 'Sinhala') {
         const { results } = await db.prepare(`
@@ -63,16 +57,13 @@ async function fetchPdfData(requesterUid) {
         rosterRows = results;
     }
 
+    // 5. Fetch Special Dates (SQLite Syntax)
     const startM = targetSunday.getMonth() + 1;
     const startD = targetSunday.getDate();
     const endM = nextSaturday.getMonth() + 1;
     const endD = nextSaturday.getDate();
 
-    // SQLite conversion:
-    // MySQL: MONTH(date) -> SQLite: CAST(strftime('%m', date) AS INTEGER)
-    // MySQL: DAY(date)   -> SQLite: CAST(strftime('%d', date) AS INTEGER)
     let birthdayQuery = '';
-    
     if (startM === endM) {
         birthdayQuery = `AND (CAST(strftime('%m', event_date) AS INTEGER) = ${startM} AND CAST(strftime('%d', event_date) AS INTEGER) BETWEEN ${startD} AND ${endD})`;
     } else {
@@ -90,6 +81,7 @@ async function fetchPdfData(requesterUid) {
         ORDER BY CAST(strftime('%m', event_date) AS INTEGER), CAST(strftime('%d', event_date) AS INTEGER) ASC
     `).all();
 
+    // Group News
     const groupedNews = newsRows.reduce((acc, item) => {
         const existing = acc.find(n => n.title === item.title);
         if (existing) existing.items.push(item.description);
@@ -162,8 +154,6 @@ const generateHtml = (data, uiText, logoBase64) => {
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&family=Noto+Sans+Sinhala:wght@400;700&family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
         <style>
             body { font-family: 'Noto Sans', 'Noto Sans Sinhala', 'Noto Sans Tamil', sans-serif; color: #1e293b; padding: 0px 10px; font-size: 12px; line-height: 1.4; }
-            .page-break { page-break-before: always; }
-            .avoid-break { break-inside: avoid; }
             .sidebar { float: right; width: 38%; margin-left: 20px; margin-bottom: 20px; }
             .main-content-wrapper { display: block; }
             .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; break-inside: avoid; }
@@ -251,30 +241,37 @@ const generateHtml = (data, uiText, logoBase64) => {
 };
 
 // ==================================================================
-// 3. MAIN API HANDLER (Updated for Cloudflare)
+// 3. MAIN API HANDLER
 // ==================================================================
-export const runtime = 'edge'; // Force Edge Runtime
-
 export async function GET(req) {
     try {
+        // 1. Get Context and Environment
+        // This is critical for Cloudflare Bindings
+        const { env } = getRequestContext();
+
+        // ----------------------------------------------------
+        // DIAGNOSTIC CHECK: Is the Browser Binding Found?
+        // ----------------------------------------------------
+        if (!env || !env.MYBROWSER) {
+            console.error("FATAL: Browser Binding (MYBROWSER) is undefined.");
+            console.error("Available Env Keys:", env ? Object.keys(env) : "env is null");
+            return NextResponse.json({ 
+                error: "Configuration Error: Browser binding 'MYBROWSER' not found. Please check wrangler.toml and Cloudflare Dashboard." 
+            }, { status: 500 });
+        }
+
         const { searchParams } = new URL(req.url);
         const requesterUid = searchParams.get('requester');
 
-        // 1. Get Data from D1
+        // 2. Fetch Data
         const data = await fetchPdfData(requesterUid);
-        
-        // 2. Load Logo 
-        // IMPORTANT: 'fs' does not work in Cloudflare. 
-        // Option A: Use a hardcoded Base64 string here.
-        // Option B: Fetch it via URL if hosted.
-        // Since I cannot read your 'public' folder, I am initializing it as null. 
-        // You should paste your Base64 string here or fetch it.
+
+        // 3. Logo Handling (Base64 or URL)
         let logoBase64 = null; 
-        
-        // If you have the logo hosted on your site, you can fetch it:
-        // const logoRes = await fetch('https://your-site.com/logo.png');
-        // const logoBuf = await logoRes.arrayBuffer();
-        // logoBase64 = `data:image/png;base64,${Buffer.from(logoBuf).toString('base64')}`;
+        // Note: fs.readFileSync is NOT available in Cloudflare. 
+        // If you need the logo, you must paste the long base64 string here 
+        // or fetch it from a public URL like:
+        // const r = await fetch('https://example.com/logo.png'); const b = await r.arrayBuffer(); ...
 
         const UI_TEXT = {
             English: { verse: "Give ear, O Lord, to my prayer...", verseRef: "Psalm 86:6", latestNews: "Latest News", roster: "Duty Roster", celebrations: "Celebrations", noNews: "No news this week." },
@@ -284,18 +281,11 @@ export async function GET(req) {
         const lang = data.userLang || 'English';
         const uiText = UI_TEXT[lang] || UI_TEXT['English'];
 
-        // 3. Build HTML
+        // 4. Generate HTML
         const htmlContent = generateHtml(data, uiText, logoBase64);
 
-        // 4. Cloudflare Browser Rendering
-        // Get the browser binding from environment
-        const { env } = getRequestContext();
-        
-        // Ensure MYBROWSER is set in wrangler.toml
-        if (!env.MYBROWSER) {
-            return NextResponse.json({ error: "Browser binding 'MYBROWSER' not found in env" }, { status: 500 });
-        }
-
+        // 5. Launch Puppeteer (The part that was failing)
+        // We now safely pass the binding we checked earlier
         const browser = await puppeteer.launch({ binding: env.MYBROWSER });
         const page = await browser.newPage();
         
@@ -337,7 +327,7 @@ export async function GET(req) {
         });
 
     } catch (error) {
-        console.error("PDF Gen Error:", error);
+        console.error("PDF Gen Error Stack:", error.stack);
         return NextResponse.json({ error: "Failed to generate PDF: " + error.message }, { status: 500 });
     }
 }
